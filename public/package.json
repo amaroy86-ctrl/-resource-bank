@@ -1,0 +1,15 @@
+{
+  "name": "resource-bank-v4-ai",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "openai": "^5.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^46.0.0"
+  }
+}

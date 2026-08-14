@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Resource Bank</title><link rel="stylesheet" href="css/styles.css"/></head>
+<body><div class="simpleApp">
+<header class="simpleHeader"><div class="miniBrand"><img class="brandLogoImage" src="assets/resource-bank-logo.png" alt="Resource Bank logo"/><span>RESOURCE BANK</span></div><button class="settingsBtn" onclick="showSettings()" aria-label="Settings">⚙</button></header>
+<main class="simpleMain">
+<section id="home" class="page active searchHome">
+<div class="searchIdentity"><div class="heroLogo"><img class="heroLogoImage" src="assets/resource-bank-logo.png" alt="Resource Bank logo"/></div><h1>Resource Bank</h1><p>Search your Air Force resources.</p></div>
+<div class="googleSearch"><span class="glass">⌕</span><input id="search" autocomplete="off" enterkeyhint="search" placeholder="Search regulations, policies, TOs, guidance..."/><button class="clearSearchBtn" onclick="clearMainSearch()" aria-label="Clear">×</button></div>
+<div class="mainActions"><button class="searchAction" onclick="runDirectSearch()">Search</button><button class="aiAction" onclick="runDirectAI()">✦ Ask AI</button></div>
+<div class="examples">Try: <button onclick="exampleSearch('fleet')">fleet</button><button onclick="exampleSearch('HAZDEC')">HAZDEC</button><button onclick="exampleSearch('load planning')">load planning</button><button onclick="exampleSearch('fitness')">fitness</button></div>
+<div id="askStatus" class="askStatus"></div><div id="aiAnswer" class="aiAnswer"></div><div id="results" class="results"></div>
+</section>
+
+<section id="addResourcePage" class="page addResourcePage">
+  <div class="settingsTop">
+    <div>
+      <h2>Add Resource</h2>
+      <p>Add local policy, work-center guidance, notes, or reference text.</p>
+    </div>
+  </div>
+
+  
+  <div class="settingsCard emailIntakeCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Paste Work Center Update</h3>
+        <p class="settingsHint">Paste the full text of an email, announcement, or work-center update. Resource Bank will organize the important information for review before anything is saved.</p>
+      </div>
+      <span class="aiPill">AI</span>
+    </div>
+
+    
+<div class="sensitiveDataWarning" role="alert">
+  <div class="sensitiveDataWarningIcon">!</div>
+  <div>
+    <b>NO CUI / PII</b>
+    <p>Do not upload, paste, or store Controlled Unclassified Information (CUI), Personally Identifiable Information (PII), PHI, classified information, or other sensitive data in Resource Bank.</p>
+  </div>
+</div>
+
+    <div class="resourceForm">
+      <label>Original Email / Message
+        <textarea id="emailPaste" class="emailPaste" placeholder="Paste the entire email here — subject, sender, body, dates, references, instructions, POCs, etc."></textarea>
+      </label>
+
+      <button id="decipherBtn" class="settingsAction wideAction" onclick="decipherWorkCenterEmail()">✦ Decipher Email</button>
+      <div id="emailParseStatus" class="localSaveStatus"></div>
+    </div>
+
+    <div id="emailReview" class="emailReview" hidden>
+      <div class="reviewHeader">
+        <div>
+          <b>Review Extracted Information</b>
+          <small>Nothing is saved until you approve and submit it.</small>
+        </div>
+        <span class="reviewBadge">REVIEW</span>
+      </div>
+
+      <div class="resourceForm reviewForm">
+        <label>Resource Title
+          <input id="emailTitle" placeholder="Short title for this update"/>
+        </label>
+
+        <label>Work Center / Category
+          <input id="emailCategory" placeholder="e.g. Passenger Service, Fleet, ATOC"/>
+        </label>
+
+        <div class="twoCol">
+          <label>Effective Date
+            <input id="emailEffectiveDate" type="date"/>
+          </label>
+          <label>Review / Expiration Date
+            <input id="emailReviewDate" type="date"/>
+          </label>
+        </div>
+
+        <label>Reference / Source
+          <input id="emailReference" placeholder="Publication, memo, policy, email subject, etc."/>
+        </label>
+
+        <label>What Changed
+          <textarea id="emailSummary" class="reviewText" placeholder="Clean summary of the change"></textarea>
+        </label>
+
+        <label>Required Actions
+          <textarea id="emailActions" class="reviewText" placeholder="Actions members need to take"></textarea>
+        </label>
+
+        <label>Deadlines / Suspenses
+          <textarea id="emailDeadlines" class="reviewText shortReviewText" placeholder="Any due dates, suspenses, or implementation deadlines"></textarea>
+        </label>
+
+        <label>POC / Contact Information
+          <textarea id="emailPoc" class="reviewText shortReviewText" placeholder="Names, office symbols, emails, phone numbers"></textarea>
+        </label>
+
+        <label>Clean Searchable Resource Text
+          <textarea id="emailCleanText" class="reviewText cleanResourceText" placeholder="Final searchable version that will be added to Resource Bank"></textarea>
+        </label>
+
+        <div class="reviewActions">
+          <button class="secondaryAction" onclick="cancelEmailReview()">Cancel</button>
+          <button class="settingsAction" onclick="submitParsedEmailResource()">Submit Resource</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="settingsCard contributeCard">
+    <h3>Manual Resource Entry</h3><p class="settingsHint">Use this when you already know exactly what you want to add.</p>
+<div class="sensitiveDataWarning" role="alert">
+  <div class="sensitiveDataWarningIcon">!</div>
+  <div>
+    <b>NO CUI / PII</b>
+    <p>Do not upload, paste, or store Controlled Unclassified Information (CUI), Personally Identifiable Information (PII), PHI, classified information, or other sensitive data in Resource Bank.</p>
+  </div>
+</div>
+
+    <div class="resourceForm">
+      <label>Title
+        <input id="localTitle" placeholder="e.g. Passenger Terminal Early Bird Policy"/>
+      </label>
+
+      <label>Work Center / Category
+        <input id="localCategory" placeholder="e.g. Passenger Service, Fleet, ATOC"/>
+      </label>
+
+      <div class="twoCol">
+        <label>Effective Date
+          <input id="localEffectiveDate" type="date"/>
+        </label>
+        <label>Status
+          <select id="localStatus">
+            <option value="Approved">Approved</option>
+            <option value="Draft">Draft</option>
+            <option value="Superseded">Superseded</option>
+            <option value="Archived">Archived</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Reference / Source
+        <input id="localReference" placeholder="e.g. 62 APS OI 24-101, Section 3.2"/>
+      </label>
+
+      <label>Policy / Guidance Text
+        <textarea id="localText" placeholder="Paste the policy, procedure, note, FAQ, or work-center guidance here..."></textarea>
+      </label>
+
+      <button class="settingsAction wideAction" onclick="saveLocalKnowledge()">Save & Index Resource</button>
+      <div id="localSaveStatus" class="localSaveStatus"></div>
+    </div>
+  </div>
+
+  <div class="settingsCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Saved Local Resources</h3>
+        <p class="settingsHint">These entries are stored on this browser/device and are included in Search.</p>
+      </div>
+      <span id="localCount" class="countPill">0</span>
+    </div>
+    <div id="localResourceList"></div>
+  </div>
+
+  <div class="settingsCard">
+    <h3>Backup / Transfer</h3>
+    <p class="settingsHint">Export your local Resource Bank data as a JSON file or import a prior backup.</p>
+    <div class="backupActions">
+      
+      <label class="secondaryAction fileImportLabel">Import Local Data
+        <input id="localImportFile" type="file" accept=".json,application/json" onchange="importLocalKnowledge(event)" hidden/>
+      </label>
+    </div>
+  </div>
+</section>
+
+
+
+
+<section id="trainingPage" class="page trainingPage">
+  <div class="settingsTop">
+    <div>
+      <h2>Training Builder</h2>
+      <p>Build task training around official guidance, trainee experience, and approved local processes.</p>
+    </div>
+  </div>
+
+  <div class="settingsCard trainingBuilderCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Create Training Plan</h3>
+        <p class="settingsHint">Resource Bank will use indexed publications plus your saved local resources. Official requirements and local practices are kept visually separate.</p>
+      </div>
+      <span class="aiPill">AI</span>
+    </div>
+
+    <div class="sensitiveDataWarning" role="alert">
+      <div class="sensitiveDataWarningIcon">!</div>
+      <div>
+        <b>NO CUI / PII</b>
+        <p>Do not enter Controlled Unclassified Information (CUI), Personally Identifiable Information (PII), PHI, classified information, or other sensitive data.</p>
+      </div>
+    </div>
+
+    
+    <div class="cfetpModelCard">
+      <div class="cfetpModelHeader">
+        <b>2T2X1 CFETP Proficiency Model</b>
+        <span>6 Mar 2026</span>
+      </div>
+      <div class="cfetpModelGrid">
+        <div><strong>Basic</strong><span>Sustained application of competency over time.</span></div>
+        <div><strong>Intermediate</strong><span>Sustained application over time in a variety of situations.</span></div>
+        <div><strong>Advanced</strong><span>Sustained application over time in complex situations.</span></div>
+        <div><strong>Expert</strong><span>Innovates/formulates strategies and models, guides, or teaches others.</span></div>
+      </div>
+    </div>
+
+    <div class="resourceForm">
+      <label>Task / Training Topic
+        <input id="trainingTask" placeholder="e.g. ATOC information controller, 25K Halvorsen, Fleet Service lavatory servicing"/>
+      </label>
+
+      <div class="twoCol">
+        <label>Current CFETP Proficiency
+          <select id="trainingExperience">
+            <option value="Basic" selected>Basic</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Expert">Expert</option>
+          </select>
+        </label>
+
+        <label>Training Format
+          <select id="trainingFormat">
+            <option value="Hands-on qualification">Hands-on Qualification</option>
+            <option value="Refresher">Refresher</option>
+            <option value="Classroom plus hands-on">Classroom + Hands-on</option>
+            <option value="Scenario based">Scenario Based</option>
+            <option value="Train-the-trainer">Train-the-Trainer</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="twoCol">
+        <label>Time Available
+          <input id="trainingDuration" placeholder="e.g. 2 hours, 3 shifts, 2 weeks"/>
+        </label>
+        <label>Target CFETP Proficiency
+          <select id="trainingTarget">
+            <option value="Basic">Basic</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Expert">Expert</option>
+          </select>
+        </label>
+      </div>
+
+      <label>What does this trainee already know?
+        <textarea id="trainingKnown" class="reviewText shortReviewText" placeholder="Optional: prior experience, equipment already qualified on, tasks already proficient in..."></textarea>
+      </label>
+
+      <label>Local Process / Instructor Notes
+        <textarea id="trainingLocal" class="reviewText" placeholder="Optional: local sequence, shop practices, instructor tips, recurring mistakes, local forms/systems, shift-specific process..."></textarea>
+      </label>
+
+      <label>Training Goal
+        <textarea id="trainingGoal" class="reviewText shortReviewText" placeholder="Optional: what should the trainee be able to do independently when training is complete?"></textarea>
+      </label>
+
+      <button id="buildTrainingBtn" class="settingsAction wideAction" onclick="buildTrainingPlan()">✦ Build Training Plan</button>
+      <div id="trainingStatus" class="localSaveStatus"></div>
+    </div>
+  </div>
+
+  <div id="trainingOutput" class="trainingOutput" hidden></div>
+</section>
+
+<section id="appointmentPage" class="page appointmentPage">
+  <div class="settingsTop">
+    <div>
+      <h2>Appointment Letters</h2>
+      <p>Upload, review, and track appointment letters before they expire.</p>
+    </div>
+  </div>
+
+  <div class="settingsCard appointmentUploadCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Add Appointment Letter</h3>
+        <p class="settingsHint">Upload a PDF/TXT letter or paste the letter text. Resource Bank will extract the appointment and expiration information for your review.</p>
+      </div>
+      <span class="aiPill">AI</span>
+    </div>
+
+    
+<div class="sensitiveDataWarning" role="alert">
+  <div class="sensitiveDataWarningIcon">!</div>
+  <div>
+    <b>NO CUI / PII</b>
+    <p>Do not upload, paste, or store Controlled Unclassified Information (CUI), Personally Identifiable Information (PII), PHI, classified information, or other sensitive data in Resource Bank.</p>
+  </div>
+</div>
+
+    <div class="resourceForm">
+      <label>Appointment Letter File
+        <input id="appointmentFile" type="file" accept=".pdf,.txt,application/pdf,text/plain"/>
+      </label>
+
+      <div class="orDivider"><span>OR</span></div>
+
+      <label>Paste Letter Text
+        <textarea id="appointmentPaste" class="appointmentPaste" placeholder="Paste appointment letter text here if you do not want to upload the file..."></textarea>
+      </label>
+
+      <button id="analyzeAppointmentBtn" class="settingsAction wideAction" onclick="analyzeAppointmentLetter()">✦ Analyze Appointment Letter</button>
+      <div id="appointmentAnalyzeStatus" class="localSaveStatus"></div>
+    </div>
+
+    <div id="appointmentReview" class="emailReview" hidden>
+      <div class="reviewHeader">
+        <div>
+          <b>Review Detected Appointment Information</b>
+          <small>Nothing is saved until you approve it.</small>
+        </div>
+        <span class="reviewBadge">REVIEW</span>
+      </div>
+
+      <div class="resourceForm reviewForm">
+        <label>Letter Title
+          <input id="apptTitle" placeholder="e.g. ATOC Duty Officer Appointment Letter"/>
+        </label>
+
+        <label>Work Center / Program
+          <input id="apptCategory" placeholder="e.g. ATOC, Passenger Service, HAZMAT"/>
+        </label>
+
+        <label>Appointed Member(s)
+          <textarea id="apptMembers" class="reviewText shortReviewText" placeholder="Names/ranks detected from the letter"></textarea>
+        </label>
+
+        <label>Appointment / Role
+          <textarea id="apptRole" class="reviewText shortReviewText" placeholder="What the member(s) are appointed to perform"></textarea>
+        </label>
+
+        <div class="twoCol">
+          <label>Effective / Signed Date
+            <input id="apptEffectiveDate" type="date"/>
+          </label>
+          <label>Expiration Date
+            <input id="apptExpirationDate" type="date"/>
+          </label>
+        </div>
+
+        <label>Expiration Basis
+          <input id="apptExpirationBasis" placeholder="e.g. 1 year from signature; until superseded; explicit date"/>
+        </label>
+
+        <label>Reference / Governing Source
+          <input id="apptReference" placeholder="Publication, instruction, memo, local policy, etc."/>
+        </label>
+
+        <label>Notes / Requirements
+          <textarea id="apptSummary" class="reviewText" placeholder="Important appointment requirements or limitations"></textarea>
+        </label>
+
+        <div class="reviewActions">
+          <button class="secondaryAction" onclick="cancelAppointmentReview()">Cancel</button>
+          <button class="settingsAction" onclick="saveAppointmentLetter()">Save Appointment Letter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settingsCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Appointment Letter Tracker</h3>
+        <p class="settingsHint">Letters are automatically sorted by expiration urgency.</p>
+      </div>
+      <span id="appointmentCount" class="countPill">0</span>
+    </div>
+
+    <div class="appointmentLegend">
+      <span class="legendExpired">Expired</span>
+      <span class="legend30">≤30 Days</span>
+      <span class="legend60">≤60 Days</span>
+      <span class="legend90">≤90 Days</span>
+      <span class="legendCurrent">Current</span>
+    </div>
+
+    <div id="appointmentList"></div>
+  </div>
+</section>
+
+<section id="readFilePage" class="page readFilePage">
+  <div class="settingsTop">
+    <div>
+      <h2>ATOC Read File</h2>
+      <p>History of submitted work-center updates and local resources.</p>
+    </div>
+  </div>
+
+  <div class="settingsCard">
+    <div class="cardTitleRow">
+      <div>
+        <h3>Submission History</h3>
+        <p class="settingsHint">Newest submissions appear first. Open an entry to review exactly what was submitted.</p>
+      </div>
+      <span id="readFileCount" class="countPill">0</span>
+    </div>
+    <div id="readFileList"></div>
+  </div>
+</section>
+
+<section id="settings" class="page settingsPage">
+<div class="settingsTop"><button class="backBtn" onclick="showHome()">‹</button><div><h2>Settings</h2><p>Resource Bank configuration and sources</p></div></div>
+<div class="settingsCard"><h3>Search Engine</h3><div id="appStatus" class="statusText">Checking full publication index…</div><button class="settingsAction" onclick="runSearchSelfTest()">Run Search Self-Test</button></div>
+<div class="settingsCard">
+<h3>AI Backend</h3>
+<div id="aiBackendStatus" class="statusText">Check whether the Cloudflare Worker and OpenAI secret are ready.</div>
+<button class="settingsAction" onclick="checkAIBackend()">Check AI Connection</button>
+</div>
+<div class="settingsCard"><h3>Source Library</h3><p class="settingsHint">Publications are indexed as structured text for search, and the original PDFs are included for source verification.</p><div id="docs"></div></div>
+<div class="settingsCard warningCard"><h3>Source Currency</h3><p>Resource Bank now includes newer 2025/2026 QTPs plus older supplied editions. The 2017 McChord local instructions and the older 2018 Halvorsen QTP are labeled so users can verify current local guidance before relying on them.</p></div><div class="settingsCard warningCard"><h3>Public Cloudflare Build</h3>
+<p>Restricted Distribution D technical-order content is intentionally excluded from this public-deployment package. Keep restricted technical data in authorized internal/offline channels only.</p></div>
+<div class="settingsCard"><h3>Interactive Adobe Forms</h3><p class="settingsHint">DAF Forms 7509 and 7510 are Adobe XFA forms. Resource Bank indexes their field labels for search, but Chrome/iPhone PDF viewers may show a “Please wait…” page. Open them in Adobe Acrobat/Reader for the full interactive form.</p></div>
+</section>
+<div id="toolkit" hidden></div><div id="cats" hidden></div><div id="browseCats" hidden></div><div id="updates" hidden></div><div id="favoriteList" hidden></div>
+</main>
+<nav class="bottomNav">
+  <button id="navSearch" class="navItem active" onclick="showHome()">
+    <span class="navIcon">⌕</span><span>Search</span>
+  </button>
+  <button id="navAdd" class="navItem" onclick="showAddResource()">
+    <span class="navIcon">＋</span><span>Add</span>
+  </button>
+  <button id="navTraining" class="navItem" onclick="showTraining()">
+    <span class="navIcon">◆</span><span>Training</span>
+  </button>
+  <button id="navAppointments" class="navItem" onclick="showAppointments()">
+    <span class="navIcon">▣</span><span>Appt</span>
+  </button>
+  <button id="navReadFile" class="navItem" onclick="showReadFile()">
+    <span class="navIcon">▤</span><span>Read File</span>
+  </button>
+  <button id="navSettings" class="navItem" onclick="showSettings()">
+    <span class="navIcon">⚙</span><span>Settings</span>
+  </button>
+</nav>
+</div>
+<script src="js/data-bundle.js"></script><script src="js/fulltext-index.js"></script><script src="js/app.js"></script></body></html>

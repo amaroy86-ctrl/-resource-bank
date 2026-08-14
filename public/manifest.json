@@ -1,0 +1,8 @@
+{
+  "name": "Resource Bank",
+  "short_name": "Resource Bank",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b356b"
+}
