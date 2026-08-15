@@ -26,25 +26,40 @@ function outputText(data) {
     .map(c => c?.text || "").join("");
 }
 
-async function callOpenAI(env, { instructions, input }) {
+async function callOpenAI(env, { instructions, input, timeoutMs = 0 }) {
   if (!env.OPENAI_API_KEY) {
     const e = new Error("OPENAI_API_KEY is not configured in Cloudflare.");
     e.status = 503;
     throw e;
   }
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "authorization": `Bearer ${env.OPENAI_API_KEY}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      model: env.OPENAI_MODEL || "gpt-5",
-      store: false,
-      instructions,
-      input
-    })
-  });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  let response;
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${env.OPENAI_API_KEY}`,
+        "content-type": "application/json"
+      },
+      signal: controller?.signal,
+      body: JSON.stringify({
+        model: env.OPENAI_MODEL || "gpt-5-mini",
+        store: false,
+        instructions,
+        input
+      })
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      const e = new Error("The AI request took too long. Please try again.");
+      e.status = 504;
+      throw e;
+    }
+    throw error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const e = new Error(data?.error?.message || `OpenAI request failed (${response.status}).`);
@@ -73,8 +88,12 @@ async function handleAsk(request, env) {
   const question = textValue(body?.question, 5000).trim();
   if (!question) return json({ error: "Question is required." }, 400);
 
-  const official = officialSources(body, 12);
-  const local = arrayValue(body?.localResources, 25).map((x, i) => ({
+  const history = arrayValue(body?.history, 8).map(m => ({
+    role: m?.role === "assistant" ? "assistant" : "user",
+    content: textValue(m?.content, 6000)
+  })).filter(m => m.content.trim());
+  const official = officialSources(body, 8);
+  const local = arrayValue(body?.localResources, 12).map((x, i) => ({
     source: textValue(x?.title || `Local Resource ${i + 1}`, 250),
     subtitle: textValue(x?.category, 200),
     sourceDate: textValue(x?.effectiveDate || x?.addedDate || "Local", 100),
@@ -86,7 +105,7 @@ async function handleAsk(request, env) {
     local: true
   }));
 
-  const combined = [...official, ...local].slice(0, 16);
+  const combined = [...official, ...local].slice(0, 12);
   if (!combined.length) return json({ error: "No Resource Bank sources were retrieved for this question." }, 400);
 
   const sourceText = combined.map((s, i) =>
@@ -99,6 +118,8 @@ async function handleAsk(request, env) {
   const instructions = `You are Resource Bank's source-grounded assistant.
 - Answer ONLY from the supplied Resource Bank sources.
 - Do not use outside knowledge or invent requirements.
+- Conversation history is context for interpreting the new question only. It is NOT a source of policy facts.
+- If a requirement mentioned in conversation history is not supported by the currently supplied sources, say the current supplied sources do not support it.
 - Preserve mandatory wording such as must, will, shall, required, prohibited, NLT, minimum, and maximum.
 - Cite supporting source numbers inline as [1], [2], etc.
 - If the supplied sources do not support the answer, say so.
@@ -108,7 +129,8 @@ async function handleAsk(request, env) {
 
   const answer = await callOpenAI(env, {
     instructions,
-    input: `QUESTION\n${question}\n\nRESOURCE BANK SOURCES\n${sourceText}`
+    input: `RECENT CONVERSATION CONTEXT (NOT A POLICY SOURCE)\n${history.length ? history.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n") : "No prior conversation."}\n\nCURRENT QUESTION\n${question}\n\nCURRENT RESOURCE BANK SOURCES (THE ONLY POLICY FACT SOURCES)\n${sourceText}`,
+    timeoutMs: 45000
   });
 
   return json({
@@ -295,7 +317,7 @@ async function routeApi(request, env, url) {
       ok: true,
       runtime: "cloudflare-workers",
       openaiConfigured: Boolean(env.OPENAI_API_KEY),
-      model: env.OPENAI_MODEL || "gpt-5"
+      model: env.OPENAI_MODEL || "gpt-5-mini"
     });
   }
 

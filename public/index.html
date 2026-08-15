@@ -9,7 +9,12 @@
 <div class="googleSearch"><span class="glass">⌕</span><input id="search" autocomplete="off" enterkeyhint="search" placeholder="Search regulations, policies, TOs, guidance..."/><button class="clearSearchBtn" onclick="clearMainSearch()" aria-label="Clear">×</button></div>
 <div class="mainActions"><button class="searchAction" onclick="runDirectSearch()">Search</button><button class="aiAction" onclick="runDirectAI()">✦ Ask AI</button></div>
 <div class="examples">Try: <button onclick="exampleSearch('fleet')">fleet</button><button onclick="exampleSearch('HAZDEC')">HAZDEC</button><button onclick="exampleSearch('load planning')">load planning</button><button onclick="exampleSearch('fitness')">fitness</button></div>
-<div id="askStatus" class="askStatus"></div><div id="aiAnswer" class="aiAnswer"></div><div id="results" class="results"></div>
+<div id="askStatus" class="askStatus" role="status" aria-live="polite"></div>
+<section id="aiConversation" class="aiConversation" aria-label="Ask AI conversation">
+  <div class="aiConversationToolbar"><b>Ask AI conversation</b><button class="newChatBtn" onclick="newAIChat()">New Chat</button></div>
+  <div id="aiAnswer" class="aiAnswer" aria-live="polite"></div>
+</section>
+<div id="results" class="results"></div>
 </section>
 
 <section id="addResourcePage" class="page addResourcePage">

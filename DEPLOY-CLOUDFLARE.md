@@ -23,7 +23,7 @@ Secret name:
 Optional normal variable:
 `OPENAI_MODEL`
 
-If no model variable is set, Resource Bank uses `gpt-5`.
+If no model variable is set, Resource Bank uses `gpt-5-mini`.
 
 ## Verify
 

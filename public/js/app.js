@@ -30,7 +30,8 @@ function render(){
   document.querySelector("#cats").innerHTML=cats; document.querySelector("#browseCats").innerHTML=cats;
   document.querySelector("#updates").innerHTML=state.updates.map(u=>`<div class="update"><div class="fileI">📄</div><div class="m"><b>${esc(u.title)}</b><small>${esc(u.meta)}</small></div><span class="badge">${esc(u.type)}</span></div>`).join("");
   renderDocs(); renderFavs(); renderCustom();
-  document.querySelector("#rCategory").innerHTML=state.categories.map(c=>`<option>${esc(c.name)}</option>`).join("");
+  const legacyCategory=document.querySelector("#rCategory");
+  if(legacyCategory) legacyCategory.innerHTML=state.categories.map(c=>`<option>${esc(c.name)}</option>`).join("");
 }
 function renderDocs(){
  const docs=(state.sources||[]).map(s=>`
@@ -69,10 +70,8 @@ function score(r,words,q){
 }
 function resetSearchUI(){
   const results=document.querySelector("#results");
-  const ai=document.querySelector("#aiAnswer");
   const status=document.querySelector("#askStatus");
   if(results){results.innerHTML="";results.style.display="none";}
-  if(ai){ai.innerHTML="";ai.style.display="none";}
   if(status){status.textContent="";status.className="askStatus";status.removeAttribute("style");}
 }
 
@@ -539,7 +538,7 @@ function setFilter(btn,val){
 function toggleFav(id){state.favorites=state.favorites.includes(id)?state.favorites.filter(x=>x!==id):[...state.favorites,id];localStorage.setItem("rbv3_favs",JSON.stringify(state.favorites));renderFavs();if(document.querySelector("#results").style.display==="block")search();}
 function renderFavs(){const rows=state.favorites.map(id=>all().find(r=>r.id===id)).filter(Boolean);document.querySelector("#favoriteList").innerHTML=rows.length?rows.map(r=>`<div class="favrow"><b>${esc(r.title)}</b><small>${esc(r.source)} • ¶ ${esc(r.paragraph)}</small><button class="primary" style="margin-top:9px" onclick="quick(${JSON.stringify(r.title)})">Search this</button></div>`).join(""):`<div class="empty">No favorites saved yet.</div>`}
 function addResource(){const title=document.querySelector("#rTitle").value.trim(),category=document.querySelector("#rCategory").value,answer=document.querySelector("#rAnswer").value.trim(),ref=document.querySelector("#rRef").value.trim();if(!title||!answer){alert("Enter a title and answer.");return}const id="local-"+Date.now();state.custom.unshift({id,title,question:title,category,source:"Local Resource",sourceDate:"Local",authority:"Local Policy",paragraph:"Local",page:"Local",answer,keywords:[title,category,ref],document:"#"});localStorage.setItem("rbv3_custom",JSON.stringify(state.custom));document.querySelector("#rTitle").value="";document.querySelector("#rAnswer").value="";document.querySelector("#rRef").value="";renderCustom();}
-function renderCustom(){document.querySelector("#custom").innerHTML=state.custom.length?state.custom.map((r,i)=>`<div class="favrow"><b>${esc(r.title)}</b><small>${esc(r.category)} • Local Policy</small><button class="primary" style="margin-top:9px;background:#8d3030" onclick="delCustom(${i})">Delete</button></div>`).join(""):`<div class="empty">No local resources added on this device yet.</div>`}
+function renderCustom(){const box=document.querySelector("#custom");if(!box)return;box.innerHTML=state.custom.length?state.custom.map((r,i)=>`<div class="favrow"><b>${esc(r.title)}</b><small>${esc(r.category)} • Local Policy</small><button class="primary" style="margin-top:9px;background:#8d3030" onclick="delCustom(${i})">Delete</button></div>`).join(""):`<div class="empty">No local resources added on this device yet.</div>`}
 function delCustom(i){state.custom.splice(i,1);localStorage.setItem("rbv3_custom",JSON.stringify(state.custom));renderCustom();}
 function go(btn){document.querySelectorAll(".navBtn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");goPage(btn.dataset.page)}
 function goPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.querySelector("#"+id).classList.add("active")}
@@ -562,7 +561,66 @@ function setMode(mode){
 }
 function runMainAction(){ state.mode==="ask" ? askResourceBank() : search(); }
 
+const AI_CHAT_STORAGE_KEY="resourceBankAIConversationV1";
+const AI_CHAT_MAX_MESSAGES=20;
+const AI_HISTORY_MAX_MESSAGES=8;
+const AI_REQUEST_TIMEOUT_MS=45000;
 let askRequestId=0;
+let activeAskController=null;
+let aiConversation=loadAIConversation();
+
+function loadAIConversation(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(AI_CHAT_STORAGE_KEY)||"[]");
+    if(!Array.isArray(saved)) return [];
+    return saved.filter(m=>m && (m.role==="user"||m.role==="assistant") && typeof m.content==="string")
+      .slice(-AI_CHAT_MAX_MESSAGES);
+  }catch(e){return [];}
+}
+function saveAIConversation(){
+  aiConversation=aiConversation.slice(-AI_CHAT_MAX_MESSAGES);
+  localStorage.setItem(AI_CHAT_STORAGE_KEY,JSON.stringify(aiConversation));
+}
+function recentAIHistory(){
+  return aiConversation.slice(-AI_HISTORY_MAX_MESSAGES).map(m=>({role:m.role,content:String(m.content||"").slice(0,6000)}));
+}
+function aiCitationsHtml(sources){
+  const citations=(sources||[]).map((s,i)=>`
+    <div class="citationCard">
+      <b>[${i+1}] ${esc(s.source)}</b>
+      <small>${esc(s.authority||"")} • ${esc(s.sourceDate||"")}<br>
+      Paragraph ${esc(s.paragraph||"—")} • Page ${esc(s.page||"—")}<br>${esc(s.title||"")}</small>
+    </div>`).join("");
+  return `<div class="aiSources"><h4>SOURCES USED</h4>${citations||"<div class='empty'>No supporting source returned.</div>"}</div>
+    <div class="aiDisclaimer">Source-only mode: the AI is instructed to answer only from retrieved Resource Bank material. Open the governing publication before making an official decision.</div>`;
+}
+function renderAIConversation(loading=false){
+  const wrap=document.querySelector("#aiConversation");
+  const box=document.querySelector("#aiAnswer");
+  if(!wrap||!box) return;
+  const messages=aiConversation.map(m=>`
+    <div class="aiMessage ${m.role}${m.error?" error":""}">
+      <div class="aiMessageLabel">${m.role==="user"?"You":"Resource Bank AI"}</div>
+      <div class="aiBubble">${esc(m.content)}</div>
+      ${m.role==="assistant"?aiCitationsHtml(m.sources||[]):""}
+    </div>`).join("");
+  const loadingHtml=loading?`<div class="aiMessage assistant" data-ai-loading="true"><div class="aiMessageLabel">Resource Bank AI</div><div class="aiBubble"><span class="aiLoadingDots" aria-label="Searching approved Resource Bank sources and formulating an answer"><i></i><i></i><i></i></span></div></div>`:"";
+  box.innerHTML=messages+loadingHtml;
+  wrap.classList.toggle("visible",Boolean(aiConversation.length||loading));
+  requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});
+}
+function newAIChat(){
+  askRequestId++;
+  if(activeAskController) activeAskController.abort();
+  activeAskController=null;
+  aiConversation=[];
+  localStorage.removeItem(AI_CHAT_STORAGE_KEY);
+  renderAIConversation(false);
+  const status=document.querySelector("#askStatus");
+  if(status){status.textContent="";status.className="askStatus";}
+  const input=document.querySelector("#search");
+  if(input){input.value="";input.focus();}
+}
 
 function retrieveOfficialSourcesForAI(raw,limit=14){
   const terms=queryTerms(raw);
@@ -597,9 +655,9 @@ function retrieveOfficialSourcesForAI(raw,limit=14){
 }
 
 async function askResourceBank(){
-  const question=document.querySelector("#search").value.trim();
+  const input=document.querySelector("#search");
+  const question=input.value.trim();
   const status=document.querySelector("#askStatus");
-  const box=document.querySelector("#aiAnswer");
   const requestId=++askRequestId;
 
   resetSearchUI();
@@ -610,40 +668,46 @@ async function askResourceBank(){
     return;
   }
 
-  status.removeAttribute("style");
-  status.className="askStatus loading";
-  status.textContent="Searching approved Resource Bank sources and formulating an answer…";
+  const history=recentAIHistory();
+  aiConversation.push({role:"user",content:question});
+  saveAIConversation();
+  input.value="";
+  input.focus();
+  status.textContent="";
+  status.className="askStatus";
+  renderAIConversation(true);
+
+  if(activeAskController) activeAskController.abort();
+  const controller=new AbortController();
+  activeAskController=controller;
+  const timeoutId=setTimeout(()=>controller.abort(),AI_REQUEST_TIMEOUT_MS);
 
   try{
     const res=await fetch("/api/ask",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({question,sources:retrieveOfficialSourcesForAI(question,12),localResources:getLocalKnowledge().slice(0,25)})
+      signal:controller.signal,
+      body:JSON.stringify({question,history,sources:retrieveOfficialSourcesForAI(question,8),localResources:getLocalKnowledge().slice(0,12)})
     });
     const data=await res.json();
     if(requestId!==askRequestId) return;
     if(!res.ok) throw new Error(data.error||"Unable to generate an answer.");
 
-    status.className="askStatus";
-    status.textContent="";
-    const citations=(data.sources||[]).map((s,i)=>`
-      <div class="citationCard">
-        <b>[${i+1}] ${esc(s.source)}</b>
-        <small>${esc(s.authority||"")} • ${esc(s.sourceDate||"")}<br>
-        Paragraph ${esc(s.paragraph||"—")} • Page ${esc(s.page||"—")}<br>${esc(s.title||"")}</small>
-      </div>`).join("");
-
-    box.innerHTML=`
-      <div class="aiHead"><b>✨ Resource Bank Answer</b><span class="badge">${esc(data.sourceCount||0)} SOURCES</span></div>
-      <div class="aiBody">${esc(data.answer)}</div>
-      <div class="aiSources"><h4>SOURCES USED</h4>${citations||"<div class='empty'>No supporting source returned.</div>"}</div>
-      <div class="aiDisclaimer">Source-only mode: the AI is instructed to answer only from retrieved Resource Bank material. Open the governing publication before making an official decision.</div>`;
-    box.style.display="block";
+    aiConversation.push({role:"assistant",content:String(data.answer||""),sources:data.sources||[],sourceCount:data.sourceCount||0});
+    saveAIConversation();
+    renderAIConversation(false);
   }catch(err){
     if(requestId!==askRequestId) return;
-    status.removeAttribute("style");
-    status.className="askStatus error";
-    status.textContent=String(err.message||"AI request failed.");
+    const message=err?.name==="AbortError"
+      ? "The AI request took too long. Please try again."
+      : String(err.message||"AI request failed.");
+    aiConversation.push({role:"assistant",content:message,sources:[],error:true});
+    saveAIConversation();
+    renderAIConversation(false);
+  }finally{
+    clearTimeout(timeoutId);
+    if(activeAskController===controller) activeAskController=null;
+    if(requestId===askRequestId) input.focus();
   }
 }
 
@@ -656,12 +720,17 @@ function runSearchSelfTest(){
   const tests=["fleet","fleet service","dirty fleet","potable water","load planning","joint inspector","c17 winch","hazmat training","deviation code","bullet statements","fitness"];
   const report=tests.map(q=>{
     const terms=queryTerms(q);
-    const best=state.fulltext.map(c=>({...c,_score:fulltextScore(c,q,terms)})).sort((a,b)=>b._score-a._score)[0];
+    const coreTerms=coreQueryTerms(q);
+    const best=state.fulltext.reduce((top,c)=>{
+      const score=fulltextScore(c,q,terms,coreTerms,"");
+      return !top||score>top._score?{...c,_score:score}:top;
+    },null);
     return `${q}: ${best&&best._score>0 ? "PASS — "+best.source+" p."+best.page+" "+(best.heading||"") : "FAIL"}`;
   });
   alert(report.join("\n"));
 }
 
+renderAIConversation(false);
 load();
 installSearchEvents();
 
