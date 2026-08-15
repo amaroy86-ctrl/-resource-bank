@@ -26,7 +26,7 @@ function outputText(data) {
     .map(c => c?.text || "").join("");
 }
 
-async function callOpenAI(env, { instructions, input, timeoutMs = 0 }) {
+async function callOpenAI(env, { instructions, input, timeoutMs = 0, reasoningEffort = "", maxOutputTokens = 0 }) {
   if (!env.OPENAI_API_KEY) {
     const e = new Error("OPENAI_API_KEY is not configured in Cloudflare.");
     e.status = 503;
@@ -35,6 +35,7 @@ async function callOpenAI(env, { instructions, input, timeoutMs = 0 }) {
   const controller = timeoutMs ? new AbortController() : null;
   const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   let response;
+  const model = env.OPENAI_MODEL || "gpt-5-mini";
   try {
     response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -44,10 +45,12 @@ async function callOpenAI(env, { instructions, input, timeoutMs = 0 }) {
       },
       signal: controller?.signal,
       body: JSON.stringify({
-        model: env.OPENAI_MODEL || "gpt-5-mini",
+        model,
         store: false,
         instructions,
-        input
+        input,
+        ...(reasoningEffort && /^gpt-5/i.test(model) ? { reasoning: { effort: reasoningEffort } } : {}),
+        ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})
       })
     });
   } catch (error) {
@@ -69,7 +72,7 @@ async function callOpenAI(env, { instructions, input, timeoutMs = 0 }) {
   return outputText(data);
 }
 
-function officialSources(body, max = 14) {
+function officialSources(body, max = 14, textMax = 7000) {
   return arrayValue(body?.sources || body?.officialSources, max).map((s, i) => ({
     n: i + 1,
     source: textValue(s?.source, 200),
@@ -79,7 +82,7 @@ function officialSources(body, max = 14) {
     page: textValue(s?.page, 50),
     paragraph: textValue(s?.paragraph, 120),
     heading: textValue(s?.heading, 400),
-    text: textValue(s?.text, 7000)
+    text: textValue(s?.text, textMax)
   }));
 }
 
@@ -92,11 +95,11 @@ async function handleAsk(request, env) {
   const question = textValue(body?.question, 5000).trim();
   if (!question) return json({ error: "Question is required." }, 400);
 
-  const history = arrayValue(body?.history, 8).map(m => ({
+  const history = arrayValue(body?.history, 6).map(m => ({
     role: m?.role === "assistant" ? "assistant" : "user",
-    content: textValue(m?.content, 6000)
+    content: textValue(m?.content, 2500)
   })).filter(m => m.content.trim());
-  const official = officialSources(body, 8).sort((a, b) =>
+  const official = officialSources(body, 8, 3500).sort((a, b) =>
     Number(isAfi24605Source(b)) - Number(isAfi24605Source(a))
   );
   const local = arrayValue(body?.localResources, 12).map((x, i) => ({
@@ -107,7 +110,7 @@ async function handleAsk(request, env) {
     page: "Local",
     paragraph: textValue(x?.reference || "Local", 150),
     heading: textValue(x?.reference || x?.category || "Local Resource", 300),
-    text: textValue(x?.text, 7000),
+    text: textValue(x?.text, 3000),
     local: true
   }));
 
@@ -146,7 +149,9 @@ async function handleAsk(request, env) {
   const answer = await callOpenAI(env, {
     instructions,
     input: `RECENT CONVERSATION CONTEXT (NOT A POLICY SOURCE)\n${history.length ? history.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n") : "No prior conversation."}\n\nCURRENT QUESTION\n${question}\n\nCURRENT RESOURCE BANK SOURCES (THE ONLY POLICY FACT SOURCES)\n${sourceText}`,
-    timeoutMs: 45000
+    timeoutMs: 45000,
+    reasoningEffort: "minimal",
+    maxOutputTokens: 1400
   });
 
   return json({

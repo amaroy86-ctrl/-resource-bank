@@ -560,7 +560,7 @@ function runMainAction(){search();}
 
 const AI_CHAT_STORAGE_KEY="resourceBankAIConversationV1";
 const AI_CHAT_MAX_MESSAGES=20;
-const AI_HISTORY_MAX_MESSAGES=8;
+const AI_HISTORY_MAX_MESSAGES=6;
 const AI_REQUEST_TIMEOUT_MS=45000;
 let askRequestId=0;
 let activeAskController=null;
@@ -579,7 +579,7 @@ function saveAIConversation(){
   localStorage.setItem(AI_CHAT_STORAGE_KEY,JSON.stringify(aiConversation));
 }
 function recentAIHistory(){
-  return aiConversation.slice(-AI_HISTORY_MAX_MESSAGES).map(m=>({role:m.role,content:String(m.content||"").slice(0,6000)}));
+  return aiConversation.slice(-AI_HISTORY_MAX_MESSAGES).map(m=>({role:m.role,content:String(m.content||"").slice(0,2500)}));
 }
 function retrievalQueryForAI(question,history){
   const normalized=normalizeText(question);
@@ -718,7 +718,7 @@ async function retrieveOfficialSourcesForAIAsync(raw,limit=14,signal=null){
       page:r.page,
       paragraph:paragraphRef(r),
       heading:r.heading||"",
-      text:String(r.text||"").slice(0,7000)
+      text:String(r.text||"").slice(0,3500)
     });
     if(out.length>=limit) break;
   }
