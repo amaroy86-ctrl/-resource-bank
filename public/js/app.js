@@ -42,7 +42,7 @@ function renderDocs(){
    </div>`).join("");
  document.querySelectorAll("#docs").forEach(el=>el.innerHTML=docs);
 }
-function quick(q){goPage("home");setMode("search");document.querySelector("#search").value=q;search();}
+function quick(q){showHome();document.querySelector("#search").value=q;search();}
 function score(r,words,q){
  const title=(r.title||"").toLowerCase(),
        question=(r.question||"").toLowerCase(),
@@ -545,21 +545,18 @@ function goPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.re
 document.addEventListener("keydown",e=>{
   if(e.key==="Enter" && document.activeElement.id==="search"){
     e.preventDefault();
-    runMainAction();
+    search();
+  }
+  if(e.key==="Enter" && document.activeElement.id==="aiChatInput" && !e.shiftKey){
+    e.preventDefault();
+    sendAIChat(e);
   }
 });
 
 function setMode(mode){
   state.mode=mode;
-  resetSearchUI();
-  document.querySelector("#searchModeBtn").classList.toggle("active",mode==="search");
-  document.querySelector("#askModeBtn").classList.toggle("active",mode==="ask");
-  document.querySelector("#mainActionBtn").textContent=mode==="ask"?"Ask AI":"Search";
-  document.querySelector("#search").placeholder=mode==="ask"
-    ? 'Ask naturally... e.g. "My Airman got an ATSEP No-Go. What do I do?"'
-    : 'Search anything... e.g. "load planning", "C17 winch", "hazmat training"';
 }
-function runMainAction(){ state.mode==="ask" ? askResourceBank() : search(); }
+function runMainAction(){search();}
 
 const AI_CHAT_STORAGE_KEY="resourceBankAIConversationV1";
 const AI_CHAT_MAX_MESSAGES=20;
@@ -584,15 +581,23 @@ function saveAIConversation(){
 function recentAIHistory(){
   return aiConversation.slice(-AI_HISTORY_MAX_MESSAGES).map(m=>({role:m.role,content:String(m.content||"").slice(0,6000)}));
 }
+function retrievalQueryForAI(question,history){
+  const normalized=normalizeText(question);
+  const concepts=coreQueryTerms(question);
+  const contextual=/^(what|how)\s+about\b|^(and|also)\b|\b(it|that|those|they|them|these|he|she)\b/.test(normalized) || concepts.length<=3;
+  if(!contextual) return question;
+  const prior=[...(history||[])].reverse().find(m=>m.role==="user" && String(m.content||"").trim());
+  return prior ? `${String(prior.content).slice(0,1200)}\nFollow-up: ${question}` : question;
+}
 function aiCitationsHtml(sources){
-  const citations=(sources||[]).map((s,i)=>`
+  const sourceList=sources||[];
+  const citations=sourceList.map((s,i)=>`
     <div class="citationCard">
       <b>[${i+1}] ${esc(s.source)}</b>
       <small>${esc(s.authority||"")} • ${esc(s.sourceDate||"")}<br>
       Paragraph ${esc(s.paragraph||"—")} • Page ${esc(s.page||"—")}<br>${esc(s.title||"")}</small>
     </div>`).join("");
-  return `<div class="aiSources"><h4>SOURCES USED</h4>${citations||"<div class='empty'>No supporting source returned.</div>"}</div>
-    <div class="aiDisclaimer">Source-only mode: the AI is instructed to answer only from retrieved Resource Bank material. Open the governing publication before making an official decision.</div>`;
+  return `<details class="aiSources"><summary>Sources and references (${sourceList.length})</summary>${citations||"<div class='empty'>No supporting source returned.</div>"}</details>`;
 }
 function renderAIConversation(loading=false){
   const wrap=document.querySelector("#aiConversation");
@@ -605,8 +610,9 @@ function renderAIConversation(loading=false){
       ${m.role==="assistant"?aiCitationsHtml(m.sources||[]):""}
     </div>`).join("");
   const loadingHtml=loading?`<div class="aiMessage assistant" data-ai-loading="true"><div class="aiMessageLabel">Resource Bank AI</div><div class="aiBubble"><span class="aiLoadingDots" aria-label="Searching approved Resource Bank sources and formulating an answer"><i></i><i></i><i></i></span></div></div>`:"";
-  box.innerHTML=messages+loadingHtml;
-  wrap.classList.toggle("visible",Boolean(aiConversation.length||loading));
+  const emptyHtml=!messages&&!loading?`<div class="aiEmptyState"><strong>What can I help you with?</strong><span>Ask about an Air Transportation requirement, then continue naturally with follow-up questions. Answers stay grounded in the Resource Bank sources.</span></div>`:"";
+  box.innerHTML=messages+loadingHtml+emptyHtml;
+  wrap.classList.add("visible");
   requestAnimationFrame(()=>{box.scrollTop=box.scrollHeight;});
 }
 function newAIChat(){
@@ -618,17 +624,33 @@ function newAIChat(){
   renderAIConversation(false);
   const status=document.querySelector("#askStatus");
   if(status){status.textContent="";status.className="askStatus";}
-  const input=document.querySelector("#search");
+  const input=document.querySelector("#aiChatInput");
   if(input){input.value="";input.focus();}
+  const send=document.querySelector("#aiSendBtn");
+  if(send) send.disabled=false;
+}
+
+function isAfi24605Source(source){
+  const normalized=normalizeText(`${source?.sourceId||""} ${source?.source||""} ${source?.subtitle||""}`)
+    .replace(/\s+/g,"");
+  return normalized.includes("afi24-605") || normalized.includes("dafi24-605") || normalized.includes("dafi24605");
 }
 
 function retrieveOfficialSourcesForAI(raw,limit=14){
   const terms=queryTerms(raw);
   const coreTerms=coreQueryTerms(raw);
-  const hits=state.fulltext.map((c,i)=>{
+  const scored=state.fulltext.map((c,i)=>{
       if(c.local || c.restricted) return {...c,_score:0};
       const context=nearbySearchContext(i,6);
       return {...c,_score:fulltextScore(c,raw,terms,coreTerms,context)};
+    });
+  const strongestScore=scored.reduce((best,c)=>Math.max(best,c._score),0);
+  const afiPriorityFloor=Math.max(180,strongestScore*.45);
+  const hits=scored.map(c=>{
+      // DAFI/AFI 24-605 is the primary Air Transportation instruction. Prefer its
+      // strong Ask AI matches, without promoting incidental matches for unrelated questions.
+      const sourcePriority=c._score>=afiPriorityFloor && isAfi24605Source(c) ? 1800 : 0;
+      return {...c,_score:c._score+sourcePriority};
     })
     .filter(c=>c._score>0)
     .sort((a,b)=>b._score-a._score);
@@ -655,12 +677,14 @@ function retrieveOfficialSourcesForAI(raw,limit=14){
 }
 
 async function askResourceBank(){
-  const input=document.querySelector("#search");
+  const input=document.querySelector("#aiChatInput");
   const question=input.value.trim();
   const status=document.querySelector("#askStatus");
+  const send=document.querySelector("#aiSendBtn");
   const requestId=++askRequestId;
 
-  resetSearchUI();
+  status.textContent="";
+  status.className="askStatus";
 
   if(!question){
     status.className="askStatus error";
@@ -673,6 +697,7 @@ async function askResourceBank(){
   saveAIConversation();
   input.value="";
   input.focus();
+  if(send) send.disabled=true;
   status.textContent="";
   status.className="askStatus";
   renderAIConversation(true);
@@ -683,11 +708,12 @@ async function askResourceBank(){
   const timeoutId=setTimeout(()=>controller.abort(),AI_REQUEST_TIMEOUT_MS);
 
   try{
+    const retrievalQuery=retrievalQueryForAI(question,history);
     const res=await fetch("/api/ask",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       signal:controller.signal,
-      body:JSON.stringify({question,history,sources:retrieveOfficialSourcesForAI(question,8),localResources:getLocalKnowledge().slice(0,12)})
+      body:JSON.stringify({question,history,sources:retrieveOfficialSourcesForAI(retrievalQuery,8),localResources:getLocalKnowledge().slice(0,12)})
     });
     const data=await res.json();
     if(requestId!==askRequestId) return;
@@ -707,8 +733,17 @@ async function askResourceBank(){
   }finally{
     clearTimeout(timeoutId);
     if(activeAskController===controller) activeAskController=null;
-    if(requestId===askRequestId) input.focus();
+    if(requestId===askRequestId){
+      if(send) send.disabled=false;
+      input.focus();
+    }
   }
+}
+
+function sendAIChat(event){
+  event?.preventDefault?.();
+  if(activeAskController) return;
+  askResourceBank();
 }
 
 
@@ -736,8 +771,16 @@ installSearchEvents();
 
 function setActiveNav(name){
   document.querySelectorAll(".navItem").forEach(b=>b.classList.remove("active"));
-  const id=name==="search"?"#navSearch":name==="add"?"#navAdd":name==="training"?"#navTraining":name==="appointments"?"#navAppointments":name==="readfile"?"#navReadFile":"#navSettings";
+  const id=name==="search"?"#navSearch":name==="ai"?"#navAI":name==="add"?"#navAdd":name==="training"?"#navTraining":name==="appointments"?"#navAppointments":name==="readfile"?"#navReadFile":"#navSettings";
   document.querySelector(id)?.classList.add("active");
+}
+function showAIChat(){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.querySelector("#aiChatPage").classList.add("active");
+  setActiveNav("ai");
+  renderAIConversation(Boolean(activeAskController));
+  requestAnimationFrame(()=>document.querySelector("#aiChatInput")?.focus());
+  window.scrollTo(0,0);
 }
 function showSettings(){
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
@@ -780,7 +823,7 @@ function showReadFile(){
 }
 function clearMainSearch(){const i=document.querySelector("#search");i.value="";resetSearchUI();i.focus();}
 function runDirectSearch(){state.mode="search";search();}
-function runDirectAI(){state.mode="ask";askResourceBank();}
+function runDirectAI(){showAIChat();}
 function exampleSearch(q){document.querySelector("#search").value=q;runDirectSearch();}
 
 

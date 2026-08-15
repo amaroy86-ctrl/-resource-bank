@@ -7,14 +7,30 @@
 <section id="home" class="page active searchHome">
 <div class="searchIdentity"><div class="heroLogo"><img class="heroLogoImage" src="assets/resource-bank-logo.png" alt="Resource Bank logo"/></div><h1>Resource Bank</h1><p>Search your Air Force resources.</p></div>
 <div class="googleSearch"><span class="glass">⌕</span><input id="search" autocomplete="off" enterkeyhint="search" placeholder="Search regulations, policies, TOs, guidance..."/><button class="clearSearchBtn" onclick="clearMainSearch()" aria-label="Clear">×</button></div>
-<div class="mainActions"><button class="searchAction" onclick="runDirectSearch()">Search</button><button class="aiAction" onclick="runDirectAI()">✦ Ask AI</button></div>
+<div class="mainActions"><button class="searchAction" onclick="runDirectSearch()">Search</button></div>
 <div class="examples">Try: <button onclick="exampleSearch('fleet')">fleet</button><button onclick="exampleSearch('HAZDEC')">HAZDEC</button><button onclick="exampleSearch('load planning')">load planning</button><button onclick="exampleSearch('fitness')">fitness</button></div>
-<div id="askStatus" class="askStatus" role="status" aria-live="polite"></div>
-<section id="aiConversation" class="aiConversation" aria-label="Ask AI conversation">
-  <div class="aiConversationToolbar"><b>Ask AI conversation</b><button class="newChatBtn" onclick="newAIChat()">New Chat</button></div>
-  <div id="aiAnswer" class="aiAnswer" aria-live="polite"></div>
-</section>
 <div id="results" class="results"></div>
+</section>
+
+<section id="aiChatPage" class="page aiChatPage">
+  <div class="aiChatHeader">
+    <div><span class="aiChatEyebrow">RESOURCE BANK AI</span><h2>Ask AI</h2><p>Have a source-grounded conversation about your approved resources.</p></div>
+    <button class="newChatBtn" onclick="newAIChat()">New Chat</button>
+  </div>
+  <div class="sensitiveDataWarning compactWarning" role="alert">
+    <div class="sensitiveDataWarningIcon">!</div>
+    <div><b>NO CUI / PII</b><p>Do not enter CUI, PII, PHI, classified information, or other sensitive data.</p></div>
+  </div>
+  <section id="aiConversation" class="aiConversation visible" aria-label="Ask AI conversation">
+    <div id="aiAnswer" class="aiAnswer" aria-live="polite"></div>
+  </section>
+  <div id="askStatus" class="askStatus" role="status" aria-live="polite"></div>
+  <form class="aiComposer" onsubmit="sendAIChat(event)">
+    <textarea id="aiChatInput" rows="1" autocomplete="off" enterkeyhint="send" aria-label="Message Resource Bank AI" placeholder="Ask a question or follow up on the conversation..."></textarea>
+    <button id="aiSendBtn" type="submit" aria-label="Send message">Send</button>
+  </form>
+  <p class="aiComposerHint">Enter to send • Shift+Enter for a new line</p>
+  <p class="aiChatDisclaimer">Source-only mode: answers use retrieved Resource Bank material. Open the governing publication before making an official decision.</p>
 </section>
 
 <section id="addResourcePage" class="page addResourcePage">
@@ -439,6 +455,9 @@
 <nav class="bottomNav">
   <button id="navSearch" class="navItem active" onclick="showHome()">
     <span class="navIcon">⌕</span><span>Search</span>
+  </button>
+  <button id="navAI" class="navItem" onclick="showAIChat()">
+    <span class="navIcon">✦</span><span>Ask AI</span>
   </button>
   <button id="navAdd" class="navItem" onclick="showAddResource()">
     <span class="navIcon">＋</span><span>Add</span>

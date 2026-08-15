@@ -83,6 +83,10 @@ function officialSources(body, max = 14) {
   }));
 }
 
+function isAfi24605Source(source) {
+  return /\bD?AFI\s*24[- ]?605\b/i.test(`${source?.source || ""} ${source?.subtitle || ""}`);
+}
+
 async function handleAsk(request, env) {
   const body = await request.json();
   const question = textValue(body?.question, 5000).trim();
@@ -92,7 +96,9 @@ async function handleAsk(request, env) {
     role: m?.role === "assistant" ? "assistant" : "user",
     content: textValue(m?.content, 6000)
   })).filter(m => m.content.trim());
-  const official = officialSources(body, 8);
+  const official = officialSources(body, 8).sort((a, b) =>
+    Number(isAfi24605Source(b)) - Number(isAfi24605Source(a))
+  );
   const local = arrayValue(body?.localResources, 12).map((x, i) => ({
     source: textValue(x?.title || `Local Resource ${i + 1}`, 250),
     subtitle: textValue(x?.category, 200),
@@ -118,6 +124,13 @@ async function handleAsk(request, env) {
   const instructions = `You are Resource Bank's source-grounded assistant.
 - Answer ONLY from the supplied Resource Bank sources.
 - Do not use outside knowledge or invent requirements.
+- Interpret the user's practical intent from the current question and recent conversation before answering. Do not merely repeat or summarize retrieved excerpts.
+- Give the best direct answer first in plain language, then explain the controlling requirements, exceptions, responsibilities, or next steps supported by the sources.
+- Support every material policy or regulatory claim with an inline source citation such as [1]. Never attach a citation to a claim that the cited excerpt does not support.
+- Clearly distinguish mandatory requirements from permissions, recommendations, local practices, and your practical explanation.
+- If the question is ambiguous but one reasonable interpretation is strongly supported, briefly state that interpretation and answer it. Ask one concise clarifying question only when different interpretations would materially change the answer.
+- When relevant DAFI/AFI 24-605 excerpts are supplied, treat them as the primary source, lead with their supported requirements, and use other sources only to supplement them or address matters 24-605 does not cover.
+- Do not force DAFI/AFI 24-605 into an unrelated answer or imply it supports a requirement that its supplied excerpts do not state.
 - Conversation history is context for interpreting the new question only. It is NOT a source of policy facts.
 - If a requirement mentioned in conversation history is not supported by the currently supplied sources, say the current supplied sources do not support it.
 - Preserve mandatory wording such as must, will, shall, required, prohibited, NLT, minimum, and maximum.
@@ -125,6 +138,9 @@ async function handleAsk(request, env) {
 - If the supplied sources do not support the answer, say so.
 - Identify Local Resource content as local guidance, not Air Force-wide policy.
 - Identify older/legacy-source limitations when present.
+- Respond like a helpful conversation, not a regulation search-results page. Start with a direct, natural answer and explain the practical meaning in plain language.
+- Do not lead with a list of publications or dump source metadata into the answer. Use inline citations, and mention a publication by name only when it helps the user understand the requirement.
+- Use bullets only when they make steps or multiple requirements easier to follow.
 - Be practical and concise, but include exact requirements when the source states them.`;
 
   const answer = await callOpenAI(env, {

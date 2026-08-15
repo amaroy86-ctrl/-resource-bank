@@ -235,6 +235,27 @@ button,input,textarea,select{font:inherit}
   margin-top:28px;
 }
 .aiConversation.visible{display:block}
+.aiChatPage{
+  padding-top:22px;
+  min-height:calc(100dvh - 150px);
+}
+.aiChatHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:14px;
+}
+.aiChatHeader h2{margin:3px 0 4px;font-size:28px;color:#f3f8fd}
+.aiChatHeader p{margin:0;color:#92a4b6;font-size:12px;line-height:1.5}
+.aiChatEyebrow{color:#70b7ff;font-size:9px;font-weight:900;letter-spacing:.14em}
+.compactWarning{margin-bottom:14px!important;padding:10px 12px!important}
+.compactWarning p{margin:3px 0 0!important}
+.aiChatPage .aiConversation{
+  display:flex;
+  flex-direction:column;
+  margin-top:0;
+}
 .aiConversationToolbar{
   display:flex;
   justify-content:space-between;
@@ -268,6 +289,21 @@ button,input,textarea,select{font:inherit}
   background:rgba(10,20,31,.82);
   scroll-behavior:smooth;
 }
+.aiChatPage .aiAnswer{
+  min-height:clamp(330px,55dvh,680px);
+  max-height:clamp(330px,55dvh,680px);
+  border-radius:18px 18px 8px 8px;
+}
+.aiEmptyState{
+  margin:auto;
+  max-width:430px;
+  padding:34px 22px;
+  text-align:center;
+  color:#91a6ba;
+  line-height:1.6;
+}
+.aiEmptyState strong{display:block;margin-bottom:7px;color:#e8f3fd;font-size:17px}
+.aiEmptyState span{font-size:12px}
 .aiMessage{display:flex;flex-direction:column;gap:5px;max-width:92%}
 .aiMessage.user{align-self:flex-end;align-items:flex-end}
 .aiMessage.assistant{align-self:flex-start;align-items:flex-start}
@@ -306,8 +342,9 @@ button,input,textarea,select{font:inherit}
   white-space:pre-wrap;
   color:#d6e1ec;
 }
-.aiSources{padding:0 16px 16px}
-.aiSources h4{font-size:11px;color:#92a4b6}
+.aiSources{width:min(560px,100%);padding:4px 4px 8px}
+.aiSources summary{cursor:pointer;color:#8ebde9;font-size:11px;font-weight:800;padding:5px 8px}
+.aiSources[open]{border:1px solid rgba(255,255,255,.06);border-radius:12px;background:#0d1a27;padding:7px 10px}
 .citationCard{
   border-top:1px solid rgba(255,255,255,.06);
   padding:10px 0;
@@ -326,12 +363,59 @@ button,input,textarea,select{font:inherit}
   color:#7f92a6;
   font-size:10px;
 }
+.aiComposer{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  padding:11px;
+  border:1px solid #294761;
+  border-top:0;
+  border-radius:8px 8px 18px 18px;
+  background:#0e1d2b;
+  box-shadow:0 14px 32px rgba(0,0,0,.2);
+}
+.aiComposer textarea{
+  flex:1;
+  min-height:44px;
+  max-height:150px;
+  resize:none;
+  overflow-y:auto;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#eef5fb;
+  padding:11px 10px;
+  line-height:1.45;
+}
+.aiComposer textarea::placeholder{color:#71879b}
+.aiComposer button{
+  min-width:72px;
+  min-height:44px;
+  border:1px solid #2b73da;
+  border-radius:12px;
+  background:linear-gradient(180deg,#2879df,#1a61c4);
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+.aiComposer button:disabled{opacity:.55;cursor:wait}
+.aiComposerHint{margin:6px 4px 0;text-align:right;color:#64798d;font-size:9px}
+.aiChatDisclaimer{margin:5px 4px 0;color:#71869a;font-size:9px;line-height:1.45}
 @media(max-width:600px){
-  .aiConversation{margin-top:20px}
-  .aiAnswer{max-height:58vh;padding:10px;border-radius:15px}
+  .aiChatPage{padding-top:14px}
+  .aiChatHeader{align-items:center}
+  .aiChatHeader h2{font-size:24px}
+  .aiChatHeader p{max-width:240px}
+  .aiAnswer{padding:10px;border-radius:15px}
+  .aiChatPage .aiAnswer{
+    min-height:clamp(260px,calc(100dvh - 500px),480px);
+    max-height:clamp(260px,calc(100dvh - 500px),480px);
+  }
   .aiMessage{max-width:97%}
   .aiBubble{font-size:13px;padding:11px 12px}
   .newChatBtn{min-height:42px;padding:9px 14px}
+  .aiComposer{padding:8px;gap:6px}
+  .aiComposer button{min-width:62px}
 }
 .settingsPage{padding-top:24px}
 .settingsTop{
@@ -622,7 +706,7 @@ body{padding-bottom:72px}
   height:68px;
   padding:6px 12px calc(6px + env(safe-area-inset-bottom));
   display:grid;
-  grid-template-columns:repeat(6,1fr);
+  grid-template-columns:repeat(7,1fr);
   background:rgba(7,17,27,.96);
   backdrop-filter:blur(16px);
   border-top:1px solid rgba(255,255,255,.08);
