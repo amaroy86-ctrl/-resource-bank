@@ -609,7 +609,7 @@ function renderAIConversation(loading=false){
       <div class="aiBubble">${esc(m.content)}</div>
       ${m.role==="assistant"?aiCitationsHtml(m.sources||[]):""}
     </div>`).join("");
-  const loadingHtml=loading?`<div class="aiMessage assistant" data-ai-loading="true"><div class="aiMessageLabel">Resource Bank AI</div><div class="aiBubble"><span class="aiLoadingDots" aria-label="Searching approved Resource Bank sources and formulating an answer"><i></i><i></i><i></i></span></div></div>`:"";
+  const loadingHtml=loading?`<div class="aiMessage assistant" data-ai-loading="true"><div class="aiMessageLabel">Resource Bank AI</div><div class="aiBubble aiLoadingBubble"><span class="aiLoadingDots" aria-hidden="true"><i></i><i></i><i></i></span><span class="aiLoadingText">Searching approved sources and preparing an answer…</span></div></div>`:"";
   const emptyHtml=!messages&&!loading?`<div class="aiEmptyState"><strong>What can I help you with?</strong><span>Ask about an Air Transportation requirement, then continue naturally with follow-up questions. Answers stay grounded in the Resource Bank sources.</span></div>`:"";
   box.innerHTML=messages+loadingHtml+emptyHtml;
   wrap.classList.add("visible");
@@ -627,7 +627,7 @@ function newAIChat(){
   const input=document.querySelector("#aiChatInput");
   if(input){input.value="";input.focus();}
   const send=document.querySelector("#aiSendBtn");
-  if(send) send.disabled=false;
+  if(send){send.disabled=false;send.textContent="Send";}
 }
 
 function isAfi24605Source(source){
@@ -676,6 +676,55 @@ function retrieveOfficialSourcesForAI(raw,limit=14){
   return out;
 }
 
+async function retrieveOfficialSourcesForAIAsync(raw,limit=14,signal=null){
+  const terms=queryTerms(raw);
+  const coreTerms=coreQueryTerms(raw);
+  const scored=[];
+  const chunkSize=300;
+
+  for(let i=0;i<state.fulltext.length;i++){
+    if(signal?.aborted) throw new DOMException("Request cancelled.","AbortError");
+    const c=state.fulltext[i];
+    if(c.local || c.restricted){
+      scored.push({...c,_score:0});
+    }else{
+      const context=nearbySearchContext(i,6);
+      scored.push({...c,_score:fulltextScore(c,raw,terms,coreTerms,context)});
+    }
+    // Yield regularly so the chat message, loading animation, and controls remain responsive.
+    if(i>0 && i%chunkSize===0) await new Promise(resolve=>setTimeout(resolve,0));
+  }
+
+  const strongestScore=scored.reduce((best,c)=>Math.max(best,c._score),0);
+  const afiPriorityFloor=Math.max(180,strongestScore*.45);
+  const hits=scored.map(c=>{
+      const sourcePriority=c._score>=afiPriorityFloor && isAfi24605Source(c) ? 1800 : 0;
+      return {...c,_score:c._score+sourcePriority};
+    })
+    .filter(c=>c._score>0)
+    .sort((a,b)=>b._score-a._score);
+
+  const seen=new Set(), out=[];
+  for(const r of hits){
+    const key=[r.sourceId,r.page,r.heading||"",String(r.text||"").slice(0,100)].join("|");
+    if(seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id:r.id,
+      source:r.source,
+      subtitle:r.subtitle||"",
+      sourceDate:r.sourceDate||"",
+      authority:r.authority||"",
+      page:r.page,
+      paragraph:paragraphRef(r),
+      heading:r.heading||"",
+      text:String(r.text||"").slice(0,7000)
+    });
+    if(out.length>=limit) break;
+  }
+  return out;
+}
+
 async function askResourceBank(){
   const input=document.querySelector("#aiChatInput");
   const question=input.value.trim();
@@ -697,23 +746,29 @@ async function askResourceBank(){
   saveAIConversation();
   input.value="";
   input.focus();
-  if(send) send.disabled=true;
-  status.textContent="";
-  status.className="askStatus";
+  if(send){send.disabled=true;send.textContent="Working…";}
+  status.textContent="Searching approved Resource Bank sources…";
+  status.className="askStatus loading";
   renderAIConversation(true);
 
   if(activeAskController) activeAskController.abort();
   const controller=new AbortController();
   activeAskController=controller;
-  const timeoutId=setTimeout(()=>controller.abort(),AI_REQUEST_TIMEOUT_MS);
+  let timeoutId=null;
 
   try{
+    // Allow the browser to display feedback before source scoring begins.
+    await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
     const retrievalQuery=retrievalQueryForAI(question,history);
+    const sources=await retrieveOfficialSourcesForAIAsync(retrievalQuery,8,controller.signal);
+    if(requestId!==askRequestId) return;
+    status.textContent="Sources found. Asking Resource Bank AI…";
+    timeoutId=setTimeout(()=>controller.abort(),AI_REQUEST_TIMEOUT_MS);
     const res=await fetch("/api/ask",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       signal:controller.signal,
-      body:JSON.stringify({question,history,sources:retrieveOfficialSourcesForAI(retrievalQuery,8),localResources:getLocalKnowledge().slice(0,12)})
+      body:JSON.stringify({question,history,sources,localResources:getLocalKnowledge().slice(0,12)})
     });
     const data=await res.json();
     if(requestId!==askRequestId) return;
@@ -721,6 +776,8 @@ async function askResourceBank(){
 
     aiConversation.push({role:"assistant",content:String(data.answer||""),sources:data.sources||[],sourceCount:data.sourceCount||0});
     saveAIConversation();
+    status.textContent="";
+    status.className="askStatus";
     renderAIConversation(false);
   }catch(err){
     if(requestId!==askRequestId) return;
@@ -731,10 +788,11 @@ async function askResourceBank(){
     saveAIConversation();
     renderAIConversation(false);
   }finally{
-    clearTimeout(timeoutId);
+    if(timeoutId) clearTimeout(timeoutId);
     if(activeAskController===controller) activeAskController=null;
     if(requestId===askRequestId){
-      if(send) send.disabled=false;
+      if(send){send.disabled=false;send.textContent="Send";}
+      if(!status.classList.contains("error")){status.textContent="";status.className="askStatus";}
       input.focus();
     }
   }
