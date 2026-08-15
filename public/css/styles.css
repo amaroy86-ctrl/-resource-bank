@@ -171,6 +171,27 @@ button,input,textarea,select{font:inherit}
   padding:18px 2px;
   background:transparent;
 }
+.bestMatchResult{
+  margin-bottom:22px;
+  padding:18px;
+  border:1px solid #2a6fac;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(20,51,78,.92),rgba(12,30,46,.92));
+  box-shadow:0 14px 30px rgba(0,0,0,.2);
+}
+.bestMatchLabel{
+  display:inline-flex;
+  margin-bottom:12px;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#1d68ad;
+  color:#fff;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+.bestMatchResult h3{color:#eaf5ff;margin-top:15px}
+.bestMatchResult .answer{color:#dce9f4}
 .badges{display:flex;gap:6px;flex-wrap:wrap}
 .badge{
   font-size:9px;

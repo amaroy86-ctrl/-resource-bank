@@ -455,6 +455,54 @@ function pdfPreview(r,openByDefault=false){
   </div>`;
 }
 
+function bestCompiledResource(raw){
+  const q=normalizeText(raw);
+  const concepts=coreQueryTerms(raw);
+  if(concepts.length<2) return null;
+
+  const ranked=all().map(r=>{
+    const title=normalizeText(r.title);
+    const question=normalizeText(r.question);
+    const answer=normalizeText(r.answer);
+    const keywords=normalizeText((r.keywords||[]).join(" "));
+    const combined=`${title} ${question} ${keywords} ${answer}`;
+    const covered=concepts.filter(term=>conceptMatch(combined,term).matched).length;
+    if(covered<concepts.length) return {...r,_compiledScore:0};
+
+    let value=500;
+    if(title.includes(q)) value+=1000;
+    if(question.includes(q)) value+=800;
+    if(concepts.every(term=>conceptMatch(title,term).matched)) value+=500;
+    if(concepts.every(term=>conceptMatch(question,term).matched)) value+=380;
+    if(concepts.every(term=>conceptMatch(keywords,term).matched)) value+=300;
+    value+=requirementSignal(answer)*25;
+    return {...r,_compiledScore:value};
+  }).filter(r=>r._compiledScore>0).sort((a,b)=>b._compiledScore-a._compiledScore);
+
+  return ranked[0]||null;
+}
+
+function compiledBestMatchHtml(r){
+  if(!r) return "";
+  const link=r.document && r.document!=="#" ? `${esc(r.document)}#page=${esc(r.page||1)}` : "";
+  return `<article class="result bestMatchResult">
+    <div class="bestMatchLabel">BEST MATCH</div>
+    <div class="sourceHeader">
+      <div><div class="pubName">${esc(r.source)}</div><div class="pubSub">${esc(r.authority||"")}</div></div>
+      <div class="pageRef">Page ${esc(r.page||"—")}</div>
+    </div>
+    <div class="referenceStrip">
+      <div><span>PARAGRAPH / REFERENCE</span><b>${esc(r.paragraph||"—")}</b></div>
+      <div><span>PUBLICATION DATE</span><b>${esc(r.sourceDate||"—")}</b></div>
+      <div><span>PAGE</span><b>${esc(r.page||"—")}</b></div>
+    </div>
+    <h3>${highlightSearchTerms(esc(r.title))}</h3>
+    ${r.question?`<div class="question">${highlightSearchTerms(esc(r.question))}</div>`:""}
+    <div class="answer">${highlightSearchTerms(esc(r.answer||""))}</div>
+    ${link?`<div class="actions"><a href="${link}" target="_blank">Open governing PDF</a></div>`:""}
+  </article>`;
+}
+
 function search(preserveFilter=false){
   resetSearchUI();
   const input=document.querySelector("#search");
@@ -468,6 +516,7 @@ function search(preserveFilter=false){
 
   const terms=queryTerms(raw);
   const coreTerms=coreQueryTerms(raw);
+  const bestCompiled=bestCompiledResource(raw);
   let hits=state.fulltext.map((c,i)=>{
       const context=nearbySearchContext(i,6);
       return {...c,_score:fulltextScore(c,raw,terms,coreTerms,context)};
@@ -488,7 +537,7 @@ function search(preserveFilter=false){
     return;
   }
 
-  box.innerHTML=`<div class="searchSummary"><b>${dedup.length} top matches</b><span>${state.sources.length} indexed publications</span></div>`+
+  box.innerHTML=compiledBestMatchHtml(bestCompiled)+`<div class="searchSummary"><b>${dedup.length} publication excerpts</b><span>${state.sources.length} indexed publications</span></div>`+
     dedup.map((r,ri)=>{
       const ctx=getSourceContext(r,2);
       const para=paragraphRef(r);
