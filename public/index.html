@@ -7,7 +7,7 @@
 <section id="home" class="page active searchHome">
 <div class="searchIdentity"><div class="heroLogo"><img class="heroLogoImage" src="assets/resource-bank-logo.png" alt="Resource Bank logo"/></div><h1>Resource Bank</h1><p>Search your Air Force resources.</p></div>
 <div class="googleSearch"><span class="glass">⌕</span><input id="search" autocomplete="off" enterkeyhint="search" placeholder="Search regulations, policies, TOs, guidance..."/><button class="clearSearchBtn" onclick="clearMainSearch()" aria-label="Clear">×</button></div>
-<div class="mainActions"><button class="searchAction" onclick="runDirectSearch()">Search</button></div>
+<div class="mainActions"><button id="searchBtn" class="searchAction" onclick="runDirectSearch()">Search</button></div>
 <div class="examples">Try: <button onclick="exampleSearch('fleet')">fleet</button><button onclick="exampleSearch('HAZDEC')">HAZDEC</button><button onclick="exampleSearch('load planning')">load planning</button><button onclick="exampleSearch('fitness')">fitness</button></div>
 <div id="results" class="results"></div>
 </section>

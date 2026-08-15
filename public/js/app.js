@@ -155,9 +155,9 @@ function nearbySearchContext(index,radius=6){
     const c=state.fulltext[i];
     if(c.sourceId!==hit.sourceId) continue;
     if(Math.abs((c.page||0)-(hit.page||0))>1) continue;
-    parts.push(c.heading||"",c.text||"");
+    parts.push(normalizeText(c.heading||""),c.norm||normalizeText(c.text||""));
   }
-  return normalizeText(parts.join(" "));
+  return parts.join(" ");
 }
 
 function conceptVariants(term){
@@ -503,11 +503,15 @@ function compiledBestMatchHtml(r){
   </article>`;
 }
 
-function search(preserveFilter=false){
+let searchRequestId=0;
+
+async function search(preserveFilter=false){
+  const requestId=++searchRequestId;
   resetSearchUI();
   const input=document.querySelector("#search");
   const raw=input?input.value.trim():"";
   const box=document.querySelector("#results");
+  const searchBtn=document.querySelector("#searchBtn");
   if(!raw){
     box.style.display="block";
     box.innerHTML='<div class="empty"><b>Type something to search.</b><br><small>Searches the full extracted text of every indexed publication.</small></div>';
@@ -517,11 +521,38 @@ function search(preserveFilter=false){
   const terms=queryTerms(raw);
   const coreTerms=coreQueryTerms(raw);
   const bestCompiled=bestCompiledResource(raw);
-  let hits=state.fulltext.map((c,i)=>{
+  const candidateTerms=[...new Set([...terms,...coreTerms.flatMap(conceptVariants)])].filter(Boolean);
+  const hits=[];
+  const total=state.fulltext.length;
+  const chunkSize=300;
+  box.style.display="block";
+  box.innerHTML=compiledBestMatchHtml(bestCompiled)+`<div class="searchLoading" role="status"><span class="searchSpinner" aria-hidden="true"></span><div><b>Finding additional publication excerpts…</b><small id="searchProgress">Starting search</small></div></div>`;
+  if(searchBtn){searchBtn.disabled=true;searchBtn.textContent="Searching…";}
+
+  // Paint feedback before the full index work begins.
+  await new Promise(resolve=>requestAnimationFrame(()=>resolve()));
+
+  for(let i=0;i<total;i++){
+    if(requestId!==searchRequestId) return;
+    const c=state.fulltext[i];
+    const textNorm=c.norm||normalizeText(c.text||"");
+    const metaNorm=c._searchMetaNorm||(c._searchMetaNorm=normalizeText(`${c.heading||""} ${c.source||""} ${c.subtitle||""}`));
+    const self=`${textNorm} ${metaNorm}`;
+    const likelyMatch=candidateTerms.some(term=>self.includes(term));
+    if(likelyMatch){
       const context=nearbySearchContext(i,6);
-      return {...c,_score:fulltextScore(c,raw,terms,coreTerms,context)};
-    })
-    .filter(c=>c._score>0).sort((a,b)=>b._score-a._score);
+      const scored={...c,_score:fulltextScore(c,raw,terms,coreTerms,context)};
+      if(scored._score>0) hits.push(scored);
+    }
+    if(i>0 && i%chunkSize===0){
+      const progress=document.querySelector("#searchProgress");
+      if(progress) progress.textContent=`${Math.min(99,Math.round((i/total)*100))}% complete`;
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
+  }
+
+  if(requestId!==searchRequestId) return;
+  hits.sort((a,b)=>b._score-a._score);
 
   const seen=new Set(), dedup=[];
   for(const h of hits){
@@ -534,6 +565,7 @@ function search(preserveFilter=false){
   box.style.display="block";
   if(!dedup.length){
     box.innerHTML=`<div class="empty"><b>No matching publication text found.</b><br><small>No indexed text matched “${esc(raw)}”.</small></div>`;
+    if(searchBtn){searchBtn.disabled=false;searchBtn.textContent="Search";}
     return;
   }
 
@@ -577,6 +609,7 @@ function search(preserveFilter=false){
         </div>
       </article>`;
     }).join("");
+  if(searchBtn){searchBtn.disabled=false;searchBtn.textContent="Search";}
 }
 function setFilter(btn,val){
   document.querySelectorAll(".filter").forEach(b=>b.classList.remove("active"));
@@ -928,7 +961,7 @@ function showReadFile(){
   renderATOCReadFile();
   window.scrollTo(0,0);
 }
-function clearMainSearch(){const i=document.querySelector("#search");i.value="";resetSearchUI();i.focus();}
+function clearMainSearch(){searchRequestId++;const i=document.querySelector("#search");i.value="";resetSearchUI();const b=document.querySelector("#searchBtn");if(b){b.disabled=false;b.textContent="Search";}i.focus();}
 function runDirectSearch(){state.mode="search";search();}
 function runDirectAI(){showAIChat();}
 function exampleSearch(q){document.querySelector("#search").value=q;runDirectSearch();}
